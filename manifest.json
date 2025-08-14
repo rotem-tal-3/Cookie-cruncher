@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Cookie Cruncher",
+  "version": "1.0.0",
+  "description": "Automatically rejects optional cookies and hides cookie banners.",
+  "permissions": [],
+  "host_permissions": [ "<all_urls>" ],
+  "content_scripts": [
+    {
+      "matches": [ "<all_urls>" ],
+      "js": [ "coockie_cruncher.js" ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "icons": {},
+  "action": {
+    "default_title": "Cookie Cruncher"
+  }
+}
