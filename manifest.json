@@ -3,8 +3,12 @@
   "name": "Cookie Cruncher",
   "version": "1.0.0",
   "description": "Automatically rejects optional cookies and hides cookie banners.",
-  "permissions": [],
+  "permissions": [ "storage", "tabs", "contextMenus" ],
   "host_permissions": [ "<all_urls>" ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": [ "<all_urls>" ],
