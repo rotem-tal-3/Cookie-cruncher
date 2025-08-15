@@ -281,7 +281,7 @@ function scheduleAttempt(delay = 200) {
     }, delay);
 }
 
-(function bootstrap() {
+function bootstrap() {
     let tries = 0;
     let intervalMs = 300;
     const maxTries = 8;
@@ -313,4 +313,28 @@ function scheduleAttempt(delay = 200) {
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && isBannerPresent()) scheduleAttempt(100);
     });
-})();
+}
+function normalizeHost(h) {
+    return (h || "").replace(/^www\./, "");
+}
+
+function endsWithHost(host, d) {
+    host = normalizeHost(host); return host === d || host.endsWith("." + d);
+}
+
+function isBlocked(host, list) {
+    host = normalizeHost(host);
+    return (list || []).some(d => endsWithHost(host, d));
+}
+
+chrome.storage.sync.get({ paused: false, blockedHosts: [] }, cfg => {
+    if (cfg.paused) return;
+    if (isBlocked(location.hostname, cfg.blockedHosts)) return;
+    bootstrap();
+});
+
+chrome.storage.onChanged.addListener(changes => {
+    if (changes.paused || changes.blockedHosts) {
+        location.reload();
+    }
+});
