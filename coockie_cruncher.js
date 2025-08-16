@@ -50,7 +50,7 @@ const saveSelectors = [".save-preferences-button", "#saveAndExit", "[aria-label=
     "button[class*='apply']", "#onetrust-pc-btn-handler-save", "button#save", ".qc-cmp2-footer .qc-cmp2-save-and-exit"];
 
 const bannerHints = ["[id*='cookie']", "[class*='cookie']", "[id*='consent']", "[class*='consent']",
-    "[id*='gdpr']", "[class*='gdpr']", "[data-testid*='cookie']", "div[role='dialog']"];
+    "[id*='gdpr']", "[class*='gdpr']", "[data-testid*='cookie']"];
 
 // clickable items.
 const candidateSelectors = [
@@ -166,49 +166,43 @@ function searchText() {
     }
     return false;
 }
+
 function unlockPageIfDimmed() {
+    if (!hasConsentSignal()) return false;
     let changed = false;
-    const LOCK_RE = /(cookiewall|cookie|consent|gdpr|modal-open|no-scroll|noscroll|scroll-lock|overflow-hidden|disable-scroll|is-locked|stop-scrolling|overlay|backdrop)/i;
-    const scope = [document.documentElement, document.body, ...Array.from(document.body ? document.body.children : [])].slice(0, 12);
-    scope.forEach(elem => {
-        if (!elem) return;
-        [...elem.classList].forEach(c => {
-            if (LOCK_RE.test(c)) { elem.classList.remove(c); changed = true; }
-        });
-        if (elem.hasAttribute("inert")) { elem.removeAttribute("inert"); changed = true; }
-        const cs = getComputedStyle(elem);
-        if (cs.overflow === "hidden") { elem.style.setProperty("overflow", "auto", "important"); changed = true; }
-        if (cs.pointerEvents === "none") { elem.style.setProperty("pointer-events", "auto", "important"); changed = true; }
-        if (parseFloat(cs.opacity) < 1) { elem.style.setProperty("opacity", "1", "important"); changed = true; }
-        if (cs.filter && cs.filter !== "none") { elem.style.setProperty("filter", "none", "important"); changed = true; }
-        if (cs.backdropFilter && cs.backdropFilter !== "none") { elem.style.setProperty("backdrop-filter", "none", "important"); changed = true; }
+    const LOCK_RE = /(cookie|consent|gdpr|cookiewall|no-scroll|noscroll|scroll-lock|overflow-hidden|disable-scroll|is-locked|stop-scrolling)/i;
+    [document.documentElement, document.body].forEach(el => {
+        if (!el) return;
+        [...el.classList].forEach(c => { if (LOCK_RE.test(c)) { el.classList.remove(c); changed = true; } });
+        if (el.hasAttribute("inert")) { el.removeAttribute("inert"); changed = true; }
+        const cs = getComputedStyle(el);
+        if (cs.overflow === "hidden") { el.style.setProperty("overflow", "auto", "important"); changed = true; }
+        if (cs.pointerEvents === "none") { el.style.setProperty("pointer-events", "auto", "important"); changed = true; }
     });
-    const center = document.elementsFromPoint(innerWidth / 2, innerHeight / 2);
-    for (const elem of center) {
-        if (!elem || elem === document.documentElement || elem === document.body) continue;
-        const cs = getComputedStyle(elem);
-        const r = elem.getBoundingClientRect();
-        const covers = r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9;
-        const fixedish = cs.position === "fixed" || cs.position === "absolute" || cs.position === "sticky";
-        const highZ = (parseInt(cs.zIndex) || 0) >= 999;
-        const blocks = cs.display !== "none" && cs.visibility !== "hidden" && cs.pointerEvents !== "none";
-        if (covers && fixedish && highZ && blocks) {
-            elem.style.setProperty("display", "none", "important");
-            elem.style.setProperty("visibility", "hidden", "important");
-            elem.style.setProperty("pointer-events", "none", "important");
+    const candidates = document.querySelectorAll(
+        "[id*='cookie' i],[class*='cookie' i],[id*='consent' i],[class*='consent' i],[id*='gdpr' i],[class*='gdpr' i]"
+    );
+    candidates.forEach(el => {
+        if (!el || !isVisible(el)) return;
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        const covers = r.width >= innerWidth * 0.85 && r.height >= innerHeight * 0.85;
+        const fixedish = ["fixed", "absolute", "sticky"].includes(cs.position);
+        const z = parseInt(cs.zIndex) || 0;
+        if (covers && fixedish && z >= 100) {
+            el.style.setProperty("display", "none", "important");
+            el.style.setProperty("visibility", "hidden", "important");
+            el.style.setProperty("pointer-events", "none", "important");
             changed = true;
-            break;
         }
-    }
-    document.querySelectorAll("#cookiewall, .cookiewall").forEach(elem => {
-        elem.style.setProperty("display", "none", "important");
-        elem.style.setProperty("visibility", "hidden", "important");
-        elem.style.setProperty("pointer-events", "none", "important");
     });
-    document.querySelectorAll('iframe[src*="consent.cookiebot.com"],iframe[src*="cookielaw.org"],iframe[id^="sp_message_iframe_"]').forEach(f => {
+    document.querySelectorAll(
+        'iframe[src*="consent.cookiebot.com"],iframe[src*="cookielaw.org"],iframe[id^="sp_message_iframe_"]'
+    ).forEach(f => {
         f.style.setProperty("display", "none", "important");
         f.style.setProperty("visibility", "hidden", "important");
         f.style.setProperty("pointer-events", "none", "important");
+        changed = true;
     });
     return changed;
 }
@@ -221,6 +215,40 @@ function hideConsentIframes() {
         f.style.setProperty("visibility", "hidden", "important");
         f.style.setProperty("pointer-events", "none", "important");
     });
+}
+function isCookieish(el) {
+    const a = (el.id + " " + el.className + " " + (el.innerText || "")).toLowerCase();
+    return /cookie|consent|gdpr|privacy|opt[-\s]?out|preferences?/.test(a);
+}
+
+function hideResidualBanners() {
+    if (!inConsentWindow()) return false;
+    let changed = false;
+    const sel = "[id*='cookie' i],[class*='cookie' i],[id*='consent' i],[class*='consent' i],[id*='gdpr' i],[class*='gdpr' i]";
+    document.querySelectorAll(sel).forEach(node => {
+        if (!node || !isVisible(node)) return;
+        if (!isCookieish(node)) return;
+        const r = node.getBoundingClientRect();
+        const cs = getComputedStyle(node);
+        const covers = r.width >= innerWidth * 0.7 && r.height >= innerHeight * 0.3; // cookie bars are often shorter than full-viewport
+        const layered = ["fixed", "absolute", "sticky"].includes(cs.position);
+        if (covers && layered) {
+            node.style.setProperty("display", "none", "important");
+            node.style.setProperty("visibility", "hidden", "important");
+            node.style.setProperty("pointer-events", "none", "important");
+            changed = true;
+        }
+    });
+
+    document.querySelectorAll(
+        'iframe[src*="consent.cookiebot.com"],iframe[src*="cookielaw.org"],iframe[id^="sp_message_iframe_"]'
+    ).forEach(f => {
+        f.style.setProperty("display", "none", "important");
+        f.style.setProperty("visibility", "hidden", "important");
+        f.style.setProperty("pointer-events", "none", "important");
+        changed = true;
+    });
+    return changed;
 }
 
 function hideBanners() {
@@ -254,6 +282,17 @@ function handleIframes() {
     });
 }
 
+function hasConsentSignal() {
+    if (document.querySelector(
+        'iframe[src*="consent.cookiebot.com"],iframe[src*="cookielaw.org"],iframe[id^="sp_message_iframe_"]'
+    )) return true;
+    if (document.querySelector(
+        "[id*='cookie' i],[class*='cookie' i],[id*='consent' i],[class*='consent' i],[id*='gdpr' i],[class*='gdpr' i]"
+    )) return true;
+
+    return false;
+}
+
 function attemptReject() {
     let acted = false;
     if (tryKnownSelectors()) acted = true;
@@ -261,14 +300,13 @@ function attemptReject() {
     if (acted) {
         hideBanners()
         hideConsentIframes();
-        unlockPageIfDimmed();
     }
     handleIframes();
     return acted;
 }
 function isBannerPresent(root = document) {
     return !!root.querySelector(
-        "[id*='cookie' i],[class*='cookie' i],[id*='consent' i],[class*='consent' i],[id*='gdpr' i],[class*='gdpr' i],div[role='dialog']"
+        "[id*='cookie' i],[class*='cookie' i],[id*='consent' i],[class*='consent' i],[id*='gdpr' i],[class*='gdpr' i]"
     );
 }
 
@@ -296,7 +334,7 @@ function bootstrap() {
     (function tick() {
         if (tries < maxTries) {
             tries++;
-            if (isBannerPresent()) wrappedAttempt();
+            if (isBannerPresent() && hasConsentSignal()) wrappedAttempt();
             setTimeout(tick, intervalMs);
             intervalMs = Math.min(3000, Math.floor(intervalMs * 1.7));
         }
@@ -304,7 +342,7 @@ function bootstrap() {
     const mo = new MutationObserver(muts => {
         for (const m of muts) {
             if (m.addedNodes && m.addedNodes.length) {
-                if (isBannerPresent()) scheduleAttempt(200);
+                if (hasConsentSignal()) scheduleAttempt(200);
                 break;
             }
         }
