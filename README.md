@@ -9,7 +9,7 @@ Cross-origin iframes (e.g., Cookiebot) cannot be scripted due to browser securit
 Currently supports only Hebrew and English
 
 ## Install (Developer Mode)
-Clone this repository.
+Clone this repository (or donwload the source files).
 
 open chrome://extensions and enable Developer mode (top-right).
 
